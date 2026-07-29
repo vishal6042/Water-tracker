@@ -1,0 +1,11 @@
+<!--
+  Android status-bar (notification) icon source.
+  Status-bar icons MUST be a white silhouette on a transparent background; Android
+  tints them automatically. Generate the drawable with Android Studio:
+  right-click android/app/src/main/res  →  New  →  Image Asset  →  Icon Type: "Notification Icons",
+  name: ic_stat_drop, source: this SVG. That produces the density buckets referenced
+  by capacitor.config.json (smallIcon: "ic_stat_drop").
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <path d="M48 14 C 48 14 74 44 74 62 A 26 26 0 1 1 22 62 C 22 44 48 14 48 14 Z" fill="#FFFFFF"/>
+</svg>

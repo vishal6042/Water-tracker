@@ -18,10 +18,14 @@ No build step, no dependencies. It's a single self-contained `index.html`.
   - **Monthly** — one bar per day (1–28/29/30/31) of the selected month, with a **goal line** at your daily target.
   - **Yearly** — one bar per month (Jan–Dec) of the selected year, with a **goal line** scaled per month (daily goal × days in that month).
   - The current period is highlighted, tap any bar to read its exact value, plus all-time totals (glasses, litres, active days).
+- **Reminders** — opt-in notifications to drink water, with an on/off toggle, a
+  configurable **interval** (1–4h), **active hours** (so it doesn't buzz overnight), and
+  **stop when goal reached**. Real background notifications in the Android app; a
+  while-open fallback in the browser.
 - **Goal-reached celebration** when you hit your target.
-- **Saved locally** — your goal and full history persist in the browser via `localStorage`.
+- **Saved locally** — your goal, history, and reminder settings persist via `localStorage`.
 
-## Run it
+## Run it (web)
 
 Open `index.html` in any modern browser:
 
@@ -33,6 +37,23 @@ open index.html        # macOS
 
 On a phone, open the same file/URL — it fills the screen and behaves like a
 mobile app (add it to your home screen for a PWA-like experience).
+
+## Android app (Google Play)
+
+This project is also set up as a native Android app via [Capacitor](https://capacitorjs.com/),
+reusing the same `index.html` and adding real background notifications for reminders.
+
+```bash
+npm install
+npm run build          # copies index.html → www/
+npx cap add android    # creates the native android/ project (one time)
+npx cap sync
+npx cap open android   # build & run in Android Studio
+```
+
+App id: `com.vb.watertracker`. Full step-by-step publishing instructions (icons,
+signing, Play Console, data-safety) are in **[ANDROID_PUBLISHING.md](ANDROID_PUBLISHING.md)**.
+Icon/splash sources live in `assets/`; the privacy policy is in `PRIVACY.md`.
 
 ## Notes
 

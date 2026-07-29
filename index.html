@@ -171,6 +171,43 @@
   }
   .stepper .val { min-width: 30px; text-align: center; font-weight: 800; font-size: 17px; color: var(--ink); }
 
+  /* Reminders */
+  .rem-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .rem-head .label { font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+  .rem-head .label b { color: var(--ink); font-size: 15px; }
+  .switch {
+    position: relative; width: 50px; height: 30px; border: 0; border-radius: 999px; cursor: pointer;
+    background: #CBD9EC; transition: background .2s; flex: 0 0 auto; padding: 0;
+  }
+  .switch .knob {
+    position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+    background: #fff; box-shadow: 0 2px 5px -1px rgba(13,71,161,.5); transition: transform .2s;
+  }
+  .switch.on { background: linear-gradient(180deg, var(--blue-400), var(--blue-600)); }
+  .switch.on .knob { transform: translateX(20px); }
+  .switch.small { width: 44px; height: 26px; }
+  .switch.small .knob { width: 20px; height: 20px; }
+  .switch.small.on .knob { transform: translateX(18px); }
+
+  .rem-options { margin-top: 14px; display: none; flex-direction: column; gap: 14px; }
+  .rem-options.show { display: flex; animation: fade .25s ease; }
+  .rem-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .rem-lbl { font-size: 13px; color: var(--ink-soft); font-weight: 600; }
+  .rem-chips { display: inline-flex; background: var(--blue-50); border-radius: 11px; padding: 3px; }
+  .rem-chips button {
+    border: 0; background: transparent; cursor: pointer; font-size: 12.5px; font-weight: 800;
+    color: var(--blue-700); padding: 6px 10px; border-radius: 8px; transition: .15s;
+  }
+  .rem-chips button.active { background: #fff; color: var(--blue-600); box-shadow: 0 2px 6px -3px rgba(13,71,161,.5); }
+  .rem-times { display: inline-flex; align-items: center; gap: 6px; }
+  .rem-times input[type="time"] {
+    font: inherit; font-size: 13px; font-weight: 700; color: var(--ink);
+    border: 1px solid #E1ECFA; background: var(--blue-50); border-radius: 10px; padding: 6px 8px;
+  }
+  .rem-times .dash { color: var(--ink-soft); font-weight: 700; }
+  .rem-hint { font-size: 11.5px; color: var(--ink-soft); font-weight: 600; line-height: 1.4; }
+  .rem-hint.warn { color: #C2691A; }
+
   /* Today log */
   .log-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }
   .log-list::-webkit-scrollbar { width: 0; }
@@ -319,6 +356,37 @@
         </div>
 
         <div class="card">
+          <div class="rem-head">
+            <div class="label">Reminders<br><b id="remStatus">Off</b></div>
+            <button id="remToggle" class="switch" role="switch" aria-checked="false" aria-label="Enable reminders"><span class="knob"></span></button>
+          </div>
+          <div id="remOptions" class="rem-options">
+            <div class="rem-row">
+              <span class="rem-lbl">Remind me every</span>
+              <span class="rem-chips" id="remIntervals">
+                <button data-int="1">1h</button>
+                <button data-int="2" class="active">2h</button>
+                <button data-int="3">3h</button>
+                <button data-int="4">4h</button>
+              </span>
+            </div>
+            <div class="rem-row">
+              <span class="rem-lbl">Active hours</span>
+              <span class="rem-times">
+                <input type="time" id="remStart" value="08:00" step="3600">
+                <span class="dash">–</span>
+                <input type="time" id="remEnd" value="22:00" step="3600">
+              </span>
+            </div>
+            <div class="rem-row">
+              <span class="rem-lbl">Stop when goal reached</span>
+              <button id="remSkip" class="switch small on" role="switch" aria-checked="true" aria-label="Stop reminders when goal reached"><span class="knob"></span></button>
+            </div>
+            <div class="rem-hint" id="remHint"></div>
+          </div>
+        </div>
+
+        <div class="card">
           <h2>Today's Log <span class="sub" id="logSub">250 ml per glass</span></h2>
           <ul id="logList" class="log-list"></ul>
         </div>
@@ -362,15 +430,30 @@
   // ---------- State ----------
   var state = load();
 
+  function defaultReminders() {
+    return { enabled: false, intervalHours: 2, startHour: 8, endHour: 22, skipWhenMet: true };
+  }
   function load() {
     try {
       var raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         var p = JSON.parse(raw);
-        return { target: p.target || 8, entries: Array.isArray(p.entries) ? p.entries : [] };
+        var rem = p.reminders && typeof p.reminders === "object" ? p.reminders : {};
+        var dr = defaultReminders();
+        return {
+          target: p.target || 8,
+          entries: Array.isArray(p.entries) ? p.entries : [],
+          reminders: {
+            enabled: !!rem.enabled,
+            intervalHours: rem.intervalHours || dr.intervalHours,
+            startHour: rem.startHour == null ? dr.startHour : rem.startHour,
+            endHour: rem.endHour == null ? dr.endHour : rem.endHour,
+            skipWhenMet: rem.skipWhenMet == null ? dr.skipWhenMet : !!rem.skipWhenMet
+          }
+        };
       }
     } catch (e) {}
-    return { target: 8, entries: [] };
+    return { target: 8, entries: [], reminders: defaultReminders() };
   }
   function save() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
@@ -414,6 +497,7 @@
     $("goalBanner").classList.toggle("show", cur >= tgt && tgt > 0);
 
     renderLog(today);
+    renderReminders();
     if ($("view-history").classList.contains("active")) renderHistory();
     save();
   }
@@ -434,6 +518,147 @@
               '</li>';
     }
     list.innerHTML = html;
+  }
+
+  // ---------- Reminders ----------
+  // Works on the native Android app (Capacitor LocalNotifications) and, as a
+  // best-effort fallback, in the browser (Web Notifications while the tab is open).
+  var CAP = window.Capacitor || null;
+  var webTimer = null;
+  function LN() { return (CAP && CAP.Plugins && CAP.Plugins.LocalNotifications) || null; }
+  function isNative() { return !!(CAP && CAP.isNativePlatform && CAP.isNativePlatform()); }
+  function parseHour(v, fallback) { var m = /^(\d{1,2}):/.exec(v || ""); return m ? Math.max(0, Math.min(23, +m[1])) : fallback; }
+  function fmtHour(h) { return new Date(2000, 0, 1, h).toLocaleTimeString([], { hour: "numeric" }); }
+  function fmtTime(d) { return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
+
+  // Concrete reminder times across the next `maxDays` days, future only.
+  function reminderTimes(maxDays) {
+    var r = state.reminders, out = [];
+    if (!r.enabled) return out;
+    var now = new Date();
+    var start = Math.min(r.startHour, r.endHour), end = Math.max(r.startHour, r.endHour);
+    var step = Math.max(1, r.intervalHours);
+    for (var d = 0; d < maxDays; d++) {
+      var base = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
+      if (d === 0 && r.skipWhenMet && state.target > 0 && todayEntries().length >= state.target) continue;
+      for (var h = start; h <= end; h += step) {
+        var t = new Date(base.getFullYear(), base.getMonth(), base.getDate(), h, 0, 0, 0);
+        if (t.getTime() > now.getTime() + 30000) out.push(t);
+      }
+    }
+    return out;
+  }
+
+  function ensurePermission() {
+    if (isNative() && LN()) {
+      return LN().requestPermissions().then(function (p) { return p.display === "granted"; }).catch(function () { return false; });
+    }
+    if ("Notification" in window) {
+      if (Notification.permission === "granted") return Promise.resolve(true);
+      if (Notification.permission === "denied") return Promise.resolve(false);
+      return Notification.requestPermission().then(function (r) { return r === "granted"; });
+    }
+    return Promise.resolve(false);
+  }
+
+  function scheduleReminders() {
+    if (isNative() && LN()) scheduleNative(); else scheduleWeb();
+  }
+  function scheduleNative() {
+    var ln = LN(); if (!ln) return;
+    ln.getPending().then(function (p) {
+      if (p && p.notifications && p.notifications.length) {
+        return ln.cancel({ notifications: p.notifications.map(function (n) { return { id: n.id }; }) });
+      }
+    }).then(function () {
+      if (!state.reminders.enabled) return;
+      var times = reminderTimes(14).slice(0, 60); // schedule a rolling window (OS caps pending notifications)
+      if (!times.length) return;
+      var notifs = times.map(function (t, i) {
+        return {
+          id: 1000 + i,
+          title: "Time to hydrate 💧",
+          body: "Take a sip — log a glass of water.",
+          schedule: { at: t, allowWhileIdle: true },
+          smallIcon: "ic_stat_drop"
+        };
+      });
+      return ln.schedule({ notifications: notifs });
+    }).catch(function () {});
+  }
+  function scheduleWeb() {
+    if (webTimer) { clearTimeout(webTimer); webTimer = null; }
+    if (!state.reminders.enabled) return;
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    var times = reminderTimes(2);
+    if (!times.length) return;
+    var delay = Math.max(1000, Math.min(times[0].getTime() - Date.now(), 2147483647));
+    webTimer = setTimeout(function () {
+      try {
+        if (state.reminders.enabled &&
+            (!state.reminders.skipWhenMet || state.target <= 0 || todayEntries().length < state.target)) {
+          new Notification("Time to hydrate 💧", { body: "Take a sip — log a glass of water." });
+        }
+      } catch (e) {}
+      scheduleWeb();
+    }, delay);
+  }
+
+  function renderReminders() {
+    var r = state.reminders;
+    var sw = $("remToggle");
+    sw.classList.toggle("on", r.enabled);
+    sw.setAttribute("aria-checked", r.enabled ? "true" : "false");
+    $("remStatus").textContent = r.enabled
+      ? ("Every " + r.intervalHours + "h · " + fmtHour(r.startHour) + "–" + fmtHour(r.endHour))
+      : "Off";
+    $("remOptions").classList.toggle("show", r.enabled);
+
+    var chips = $("remIntervals").children;
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].classList.toggle("active", +chips[i].getAttribute("data-int") === r.intervalHours);
+    }
+    $("remStart").value = pad(r.startHour) + ":00";
+    $("remEnd").value = pad(r.endHour) + ":00";
+    var sk = $("remSkip");
+    sk.classList.toggle("on", r.skipWhenMet);
+    sk.setAttribute("aria-checked", r.skipWhenMet ? "true" : "false");
+
+    var hint = $("remHint");
+    hint.classList.remove("warn");
+    if (!r.enabled) { hint.textContent = ""; return; }
+    var times = reminderTimes(2);
+    var nextTxt = times.length ? ("Next reminder at " + fmtTime(times[0])) : "All done for today — nice work! 🎉";
+    if (isNative()) { hint.textContent = nextTxt; return; }
+    if (!("Notification" in window)) { hint.classList.add("warn"); hint.textContent = "This browser can’t show notifications."; return; }
+    if (Notification.permission === "denied") { hint.classList.add("warn"); hint.textContent = "Notifications are blocked — enable them in your browser settings."; return; }
+    hint.textContent = nextTxt + " · In the browser, reminders run while the app is open; the Android app reminds you in the background.";
+  }
+
+  function wireReminders() {
+    $("remToggle").addEventListener("click", function () {
+      var enabling = !state.reminders.enabled;
+      if (enabling) {
+        ensurePermission().then(function (ok) {
+          state.reminders.enabled = ok;
+          save(); renderReminders(); scheduleReminders();
+          if (!ok) { var h = $("remHint"); h.classList.add("warn"); h.textContent = "Permission denied — allow notifications to get reminders."; }
+        });
+      } else {
+        state.reminders.enabled = false;
+        save(); renderReminders(); scheduleReminders();
+      }
+    });
+    var chips = $("remIntervals").children;
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].addEventListener("click", function () {
+        state.reminders.intervalHours = +this.getAttribute("data-int");
+        save(); renderReminders(); scheduleReminders();
+      });
+    }
+    $("remStart").addEventListener("change", function () { state.reminders.startHour = parseHour(this.value, state.reminders.startHour); save(); renderReminders(); scheduleReminders(); });
+    $("remEnd").addEventListener("change", function () { state.reminders.endHour = parseHour(this.value, state.reminders.endHour); save(); renderReminders(); scheduleReminders(); });
+    $("remSkip").addEventListener("click", function () { state.reminders.skipWhenMet = !state.reminders.skipWhenMet; save(); renderReminders(); scheduleReminders(); });
   }
 
   // ---------- History ----------
@@ -586,10 +811,11 @@
   }
 
   // ---------- Actions ----------
+  function rescheduleIfOn() { if (state.reminders.enabled) scheduleReminders(); }
   $("addBtn").addEventListener("click", function () {
     if (todayEntries().length >= MAX_GLASSES) return;
     state.entries.push(Date.now());
-    render();
+    render(); rescheduleIfOn();   // apply "stop when goal reached"
   });
   $("removeBtn").addEventListener("click", function () {
     var today = todayEntries();
@@ -597,13 +823,13 @@
     var latest = today[0]; // newest first
     var idx = state.entries.lastIndexOf(latest);
     if (idx > -1) state.entries.splice(idx, 1);
-    render();
+    render(); rescheduleIfOn();
   });
   $("goalPlus").addEventListener("click", function () {
-    if (state.target < MAX_GLASSES) { state.target++; render(); }
+    if (state.target < MAX_GLASSES) { state.target++; render(); rescheduleIfOn(); }
   });
   $("goalMinus").addEventListener("click", function () {
-    if (state.target > 1) { state.target--; render(); }
+    if (state.target > 1) { state.target--; render(); rescheduleIfOn(); }
   });
 
   // Tabs
@@ -664,7 +890,14 @@
   tick();
   setInterval(tick, 15000);
 
+  // Reminders: wire controls, then (re)schedule on launch and whenever the app resumes.
+  wireReminders();
   render();
+  scheduleReminders();
+  if (CAP && CAP.Plugins && CAP.Plugins.App && CAP.Plugins.App.addListener) {
+    CAP.Plugins.App.addListener("appStateChange", function (s) { if (s && s.isActive) scheduleReminders(); });
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) scheduleReminders(); });
 })();
 </script>
 </body>

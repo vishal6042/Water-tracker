@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Generated web dir (built from index.html via `npm run build`)
+www/
+
+# Android build artifacts (the android/ project itself is committed once created)
+android/.gradle/
+android/app/build/
+android/build/
+android/captures/
+android/local.properties
+android/app/release/
+*.apk
+*.aab
+
+# Signing — NEVER commit your keystore or its passwords
+*.keystore
+*.jks
+keystore.properties
+key.properties
+
+# Capacitor asset-generator working files
+.capacitor/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.iml

@@ -1,0 +1,23 @@
+{
+  "name": "water-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Water Tracker — a mobile water-intake tracker with reminders.",
+  "scripts": {
+    "build": "node scripts/build-www.js",
+    "sync": "npm run build && cap sync",
+    "open:android": "cap open android",
+    "add:android": "cap add android",
+    "assets": "capacitor-assets generate --android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/local-notifications": "^6.1.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.1.2"
+  }
+}

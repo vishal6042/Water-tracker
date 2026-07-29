@@ -1,0 +1,11 @@
+{
+  "appId": "com.vb.watertracker",
+  "appName": "Water Tracker",
+  "webDir": "www",
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_drop",
+      "iconColor": "#1565C0"
+    }
+  }
+}
