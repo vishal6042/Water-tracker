@@ -193,12 +193,34 @@
     color: var(--blue-700); padding: 7px 14px; border-radius: 9px; transition: .2s;
   }
   .hist-tabs button.active { background: #fff; color: var(--blue-600); box-shadow: 0 3px 8px -4px rgba(13,71,161,.4); }
-  .bar-row { display: grid; grid-template-columns: 66px 1fr auto; align-items: center; gap: 10px; padding: 8px 0; }
-  .bar-row .lbl { font-size: 12.5px; color: var(--ink-soft); font-weight: 700; }
-  .bar-track { height: 12px; border-radius: 999px; background: var(--blue-50); overflow: hidden; }
-  .bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--blue-300), var(--blue-600)); transition: width .5s ease; }
-  .bar-row .amt { font-size: 12px; font-weight: 800; color: var(--ink); white-space: nowrap; }
-  .amt small { color: var(--ink-soft); font-weight: 600; }
+  /* Column (bar) chart */
+  .chart-scale { font-size: 11px; color: var(--ink-soft); font-weight: 700; margin-bottom: 8px; }
+  .chart {
+    display: flex; align-items: stretch; gap: 6px;
+    padding: 0 2px; overflow-x: auto;
+  }
+  .chart::-webkit-scrollbar { height: 0; }
+  .col {
+    flex: 1 0 auto; min-width: 18px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .col-plot {
+    width: 100%; height: 172px;                 /* fixed plot area: 150px bars + headroom for value */
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+    gap: 5px;
+    border-bottom: 2px solid #DCE8F9;           /* baseline axis */
+  }
+  .col-val { font-size: 11px; font-weight: 800; color: var(--blue-700); font-variant-numeric: tabular-nums; line-height: 1; }
+  .col-bar {
+    width: 66%; max-width: 26px; min-width: 8px;
+    background: linear-gradient(180deg, var(--blue-300), var(--blue-600));
+    border-radius: 6px 6px 2px 2px;
+    transition: height .45s cubic-bezier(.4,0,.2,1);
+  }
+  .col.current .col-bar { background: linear-gradient(180deg, var(--blue-500), var(--blue-700)); box-shadow: 0 6px 14px -6px rgba(13,71,161,.65); }
+  .col-lbl { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 6px; }
+  .col.current .col-lbl { color: var(--blue-600); }
+  @media (prefers-reduced-motion: reduce) { .col-bar { transition: none; } }
 
   .totals { display: flex; gap: 10px; margin-bottom: 14px; }
   .totals .stat { flex: 1; background: linear-gradient(180deg, var(--blue-50), #fff); border: 1px solid #EAF2FE; border-radius: 16px; padding: 12px; text-align: center; }
@@ -415,41 +437,57 @@
       for (var i = 13; i >= 0; i--) {
         var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
         var k = dayKey(d);
-        rows.push({ label: d.toLocaleDateString([], { month: "short", day: "numeric" }), count: dm[k] || 0 });
+        rows.push({ label: d.toLocaleDateString([], { month: "short", day: "numeric" }), short: "" + d.getDate(), count: dm[k] || 0 });
       }
     } else if (histMode === "monthly") {
       var mm = aggregate(monthKey);
       for (var j = 11; j >= 0; j--) {
         var md = new Date(now.getFullYear(), now.getMonth() - j, 1);
         var mk = monthKey(md);
-        rows.push({ label: md.toLocaleDateString([], { month: "short", year: "2-digit" }), count: mm[mk] || 0 });
+        rows.push({ label: md.toLocaleDateString([], { month: "short", year: "2-digit" }), short: md.toLocaleDateString([], { month: "short" }), count: mm[mk] || 0 });
       }
     } else {
       var ym = aggregate(yearKey);
       var years = Object.keys(ym);
       var minY = years.length ? Math.min.apply(null, years.map(Number)) : now.getFullYear();
       for (var y = minY; y <= now.getFullYear(); y++) {
-        rows.push({ label: "" + y, count: ym["" + y] || 0 });
+        rows.push({ label: "" + y, short: "" + y, count: ym["" + y] || 0 });
       }
     }
 
-    var max = rows.reduce(function (m, r) { return Math.max(m, r.count); }, 0) || 1;
     var body = $("histBody");
     var anyData = rows.some(function (r) { return r.count > 0; });
     if (!anyData) {
       body.innerHTML = '<div class="empty">No history yet for this range.<br>Your logged glasses will appear here.</div>';
       return;
     }
-    var html = "";
-    rows.forEach(function (r) {
-      var w = (r.count / max) * 100;
-      html += '<div class="bar-row">' +
-                '<span class="lbl">' + r.label + '</span>' +
-                '<span class="bar-track"><span class="bar-fill" style="width:' + w + '%"></span></span>' +
-                '<span class="amt">' + r.count + ' <small>· ' + (r.count * GLASS_ML).toLocaleString() + ' ml</small></span>' +
-              '</div>';
-    });
-    body.innerHTML = html;
+
+    // Nice ceiling for the y-scale so bars have headroom and gridlines read cleanly.
+    var peak = rows.reduce(function (m, r) { return Math.max(m, r.count); }, 0);
+    var niceMax = peak <= 4 ? Math.max(peak, 1)
+                : peak <= 8 ? Math.ceil(peak / 2) * 2
+                : Math.ceil(peak / 5) * 5;
+
+    var PLOT_H = 150; // px available for the tallest bar (plot area is taller, leaving room for the value label)
+    var lastIdx = rows.length - 1;
+    var cols = rows.map(function (r, i) {
+      var barPx = r.count > 0 ? Math.max(Math.round((r.count / niceMax) * PLOT_H), 4) : 0;
+      var cls = "col" + (i === lastIdx ? " current" : "");
+      var title = r.label + ": " + r.count + " glass" + (r.count === 1 ? "" : "es") +
+                  " · " + (r.count * GLASS_ML).toLocaleString() + " ml";
+      return '<div class="' + cls + '" title="' + title + '">' +
+               '<span class="col-plot">' +
+                 (r.count > 0 ? '<span class="col-val">' + r.count + '</span>' : '') +
+                 '<span class="col-bar" style="height:' + barPx + 'px"></span>' +
+               '</span>' +
+               '<span class="col-lbl">' + r.short + '</span>' +
+             '</div>';
+    }).join("");
+
+    body.innerHTML = '<div class="chart-scale">Glasses per ' +
+                       (histMode === "daily" ? "day" : histMode === "monthly" ? "month" : "year") +
+                       ' · peak ' + peak + '</div>' +
+                     '<div class="chart">' + cols + '</div>';
   }
 
   // ---------- Actions ----------
