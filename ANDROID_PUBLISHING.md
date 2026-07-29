@@ -160,14 +160,18 @@ upload to Play. (Or in Android Studio: **Build → Generate Signed Bundle / APK 
 
 ## 8. Fill the store listing
 
-Prepare these assets (you can screenshot the running app for the phone shots):
+Ready-made store assets are in **`assets/play/`**:
 
-- **App icon:** 512×512 PNG (export from `assets/icon-only.png`).
-- **Feature graphic:** 1024×500 PNG.
-- **Phone screenshots:** 2–8 images (e.g. the ring, history graph, reminders card).
-- **Short description** (≤80 chars) and **full description**.
-- **Category:** Health & Fitness.
-- **Contact email.**
+- **Phone screenshots** (1170×2280): `01-home.png`, `02-reminders.png`,
+  `03-history-daily.png`, `04-history-monthly.png`, `05-history-yearly.png`.
+- **Feature graphic** (1024×500): `feature-graphic.png`.
+- **App icon** (512×512): resize `assets/icon-only.png` to 512×512 for the listing.
+
+Also write:
+
+- **Short description** (≤80 chars) — e.g. _"Track your water intake, hit your daily goal, and get reminders to drink."_
+- **Full description** — cover the goal ring, glass logging, reminders, and history graphs.
+- **Category:** Health & Fitness. **Contact email.**
 
 ## 9. Required policy declarations
 
