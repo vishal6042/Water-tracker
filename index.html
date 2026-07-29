@@ -208,7 +208,7 @@
   .chart-scale { font-size: 11px; color: var(--ink-soft); font-weight: 700; margin-bottom: 8px; }
   .chart {
     display: flex; align-items: stretch; gap: 4px;
-    padding: 0 10px; overflow: hidden;   /* clip sub-pixel rounding; never scroll */
+    padding: 0 10px 4px; overflow: hidden;   /* clip sub-pixel width rounding; content fits vertically */
   }
   .col {
     flex: 1 1 0; min-width: 0;
@@ -232,7 +232,7 @@
   }
   .col.current .col-bar { background: linear-gradient(180deg, var(--blue-500), var(--blue-700)); box-shadow: 0 6px 14px -6px rgba(13,71,161,.65); }
   .col.sel .col-bar { outline: 2px solid var(--blue-700); outline-offset: 1px; }
-  .col-lbl { font-size: 10px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 6px; height: 15px; }
+  .col-lbl { font-size: 10px; line-height: 1.3; font-weight: 700; color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 6px; }
   .col.current .col-lbl { color: var(--blue-600); }
   /* Goal reference line (dashed, per column so it steps for yearly and reads level for monthly) */
   .goal-tick { position: absolute; left: 4%; right: 4%; border-top: 2px dashed var(--goal); pointer-events: none; }
