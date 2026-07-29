@@ -13,7 +13,11 @@ No build step, no dependencies. It's a single self-contained `index.html`.
 - **Circular progress ring** showing `current / target` glasses and the water volume in **ml**.
 - **Add / Remove glass** buttons to log or undo a drink.
 - **Today's Log** — every glass appears with the **time** you drank it (e.g. `8:15 AM · 250 ml`), newest first.
-- **History** — a **bar graph** of your intake aggregated **Daily** (last 14 days), **Monthly** (last 12 months), and **Yearly**, with the current period highlighted, plus totals (glasses, litres, active days).
+- **History** — a **bar graph** with three navigable ranges (tap ‹ / › to move between periods, capped at the present):
+  - **Daily** — one bar per hour (24h) of the selected day, with a `X / target glasses` summary.
+  - **Monthly** — one bar per day (1–28/29/30/31) of the selected month, with a **goal line** at your daily target.
+  - **Yearly** — one bar per month (Jan–Dec) of the selected year, with a **goal line** scaled per month (daily goal × days in that month).
+  - The current period is highlighted, tap any bar to read its exact value, plus all-time totals (glasses, litres, active days).
 - **Goal-reached celebration** when you hit your target.
 - **Saved locally** — your goal and full history persist in the browser via `localStorage`.
 

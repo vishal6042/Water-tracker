@@ -20,6 +20,7 @@
     --ink-soft: #5B7599;
     --card:     #FFFFFF;
     --ring-track: #DCEBFF;
+    --goal:     #F59E0B;
     --shadow: 0 18px 40px -18px rgba(13, 71, 161, .45);
     --radius: 22px;
   }
@@ -193,33 +194,54 @@
     color: var(--blue-700); padding: 7px 14px; border-radius: 9px; transition: .2s;
   }
   .hist-tabs button.active { background: #fff; color: var(--blue-600); box-shadow: 0 3px 8px -4px rgba(13,71,161,.4); }
+  /* History navigation */
+  .hist-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 2px 0 12px; }
+  .hist-nav .nav-btn {
+    width: 36px; height: 36px; border: 0; border-radius: 11px; cursor: pointer;
+    background: var(--blue-50); color: var(--blue-600); font-size: 20px; font-weight: 800; line-height: 1;
+    box-shadow: 0 2px 6px -3px rgba(13,71,161,.5);
+  }
+  .hist-nav .nav-btn:disabled { opacity: .32; cursor: default; box-shadow: none; }
+  .hist-period { font-size: 15px; font-weight: 800; color: var(--ink); }
+
   /* Column (bar) chart */
   .chart-scale { font-size: 11px; color: var(--ink-soft); font-weight: 700; margin-bottom: 8px; }
   .chart {
-    display: flex; align-items: stretch; gap: 6px;
+    display: flex; align-items: stretch; gap: 4px;
     padding: 0 2px; overflow-x: auto;
   }
   .chart::-webkit-scrollbar { height: 0; }
   .col {
-    flex: 1 0 auto; min-width: 18px;
+    flex: 1 1 0; min-width: 0;
     display: flex; flex-direction: column; align-items: center;
+    cursor: pointer;
   }
   .col-plot {
+    position: relative;
     width: 100%; height: 172px;                 /* fixed plot area: 150px bars + headroom for value */
     display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
     gap: 5px;
     border-bottom: 2px solid #DCE8F9;           /* baseline axis */
   }
   .col-val { font-size: 11px; font-weight: 800; color: var(--blue-700); font-variant-numeric: tabular-nums; line-height: 1; }
+  .chart.dense .col-val { display: none; }       /* too many bars to label each */
   .col-bar {
-    width: 66%; max-width: 26px; min-width: 8px;
+    width: 62%; max-width: 26px; min-width: 3px;
     background: linear-gradient(180deg, var(--blue-300), var(--blue-600));
-    border-radius: 6px 6px 2px 2px;
+    border-radius: 5px 5px 2px 2px;
     transition: height .45s cubic-bezier(.4,0,.2,1);
   }
   .col.current .col-bar { background: linear-gradient(180deg, var(--blue-500), var(--blue-700)); box-shadow: 0 6px 14px -6px rgba(13,71,161,.65); }
-  .col-lbl { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 6px; }
+  .col.sel .col-bar { outline: 2px solid var(--blue-700); outline-offset: 1px; }
+  .col-lbl { font-size: 10px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; padding-top: 6px; height: 15px; }
   .col.current .col-lbl { color: var(--blue-600); }
+  /* Goal reference line (dashed, per column so it steps for yearly and reads level for monthly) */
+  .goal-tick { position: absolute; left: 4%; right: 4%; border-top: 2px dashed var(--goal); pointer-events: none; }
+  .chart-legend { display: flex; gap: 16px; align-items: center; justify-content: center; font-size: 11px; color: var(--ink-soft); font-weight: 600; margin-top: 10px; }
+  .chart-legend .sw { display: inline-block; width: 16px; height: 0; border-top: 2px dashed var(--goal); vertical-align: middle; margin-right: 6px; }
+  .chart-legend .sw.bar { height: 11px; width: 8px; border: 0; border-radius: 2px; background: linear-gradient(180deg, var(--blue-300), var(--blue-600)); }
+  .hist-readout { text-align: center; font-size: 12px; color: var(--ink-soft); font-weight: 600; margin-top: 8px; min-height: 16px; }
+  .hist-readout b { color: var(--ink); }
   @media (prefers-reduced-motion: reduce) { .col-bar { transition: none; } }
 
   .totals { display: flex; gap: 10px; margin-bottom: 14px; }
@@ -319,6 +341,11 @@
               <button id="h-yearly">Yearly</button>
             </span>
           </h2>
+          <div class="hist-nav">
+            <button id="histPrev" class="nav-btn" aria-label="Previous">‹</button>
+            <span id="histPeriod" class="hist-period">—</span>
+            <button id="histNext" class="nav-btn" aria-label="Next">›</button>
+          </div>
           <div id="histBody"></div>
         </div>
       </section>
@@ -412,71 +439,138 @@
 
   // ---------- History ----------
   var histMode = "daily";
+  var histCursor = new Date();   // reference date; interpreted per mode (its day / month / year)
+  var histAtPresent = true;      // whether the viewed period is the current one (gates "next")
 
-  function aggregate(keyFn) {
-    var map = {};
-    state.entries.forEach(function (ts) {
-      var k = keyFn(new Date(ts));
-      map[k] = (map[k] || 0) + 1;
-    });
-    return map;
+  function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+  function sameYMD(a, b) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+  function hour12(h) {
+    var ap = h < 12 ? "a" : "p", hr = h % 12; if (hr === 0) hr = 12;
+    return hr + ap;
+  }
+  function niceCeil(v) {
+    v = Math.max(v, 1);
+    if (v <= 5) return Math.ceil(v);
+    if (v <= 10) return Math.ceil(v / 2) * 2;
+    if (v <= 50) return Math.ceil(v / 5) * 5;
+    if (v <= 100) return Math.ceil(v / 10) * 10;
+    return Math.ceil(v / 25) * 25;
+  }
+
+  // Build the series (rows) + meta for the current mode & cursor.
+  function buildSeries() {
+    var now = new Date();
+    var tgt = state.target;
+    var y = histCursor.getFullYear(), m = histCursor.getMonth(), d = histCursor.getDate();
+    var rows = [], periodLabel = "", atPresent = false, unit = "", summary = "";
+
+    if (histMode === "daily") {
+      var day = new Date(y, m, d);
+      var isToday = sameYMD(day, now);
+      var buckets = new Array(24).fill(0), dayTotal = 0;
+      state.entries.forEach(function (ts) {
+        var e = new Date(ts);
+        if (sameYMD(e, day)) { buckets[e.getHours()]++; dayTotal++; }
+      });
+      for (var h = 0; h < 24; h++) {
+        rows.push({
+          count: buckets[h],
+          short: (h % 4 === 0) ? hour12(h) : "",
+          full: hour12(h) + "–" + hour12((h + 1) % 24),
+          current: isToday && h === now.getHours(),
+          goal: null
+        });
+      }
+      periodLabel = day.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+      atPresent = isToday;
+      unit = "hour";
+      summary = "<b>" + dayTotal + "</b> / " + tgt + " glasses · " + (dayTotal * GLASS_ML).toLocaleString() + " ml";
+    } else if (histMode === "monthly") {
+      var dim = daysInMonth(y, m);
+      var mBuckets = new Array(dim + 1).fill(0), mTotal = 0;
+      state.entries.forEach(function (ts) {
+        var e = new Date(ts);
+        if (e.getFullYear() === y && e.getMonth() === m) { mBuckets[e.getDate()]++; mTotal++; }
+      });
+      for (var dd = 1; dd <= dim; dd++) {
+        rows.push({
+          count: mBuckets[dd],
+          short: (dd === 1 || dd === dim || (dd % 5 === 0 && dim - dd >= 2)) ? ("" + dd) : "",
+          full: new Date(y, m, dd).toLocaleDateString([], { month: "short", day: "numeric" }),
+          current: y === now.getFullYear() && m === now.getMonth() && dd === now.getDate(),
+          goal: tgt   // each day's goal is the daily target
+        });
+      }
+      periodLabel = histCursor.toLocaleDateString([], { month: "long", year: "numeric" });
+      atPresent = y === now.getFullYear() && m === now.getMonth();
+      unit = "day";
+      summary = "<b>" + mTotal + "</b> glasses this month · " + (mTotal * GLASS_ML / 1000).toFixed(1) + " L";
+    } else { // yearly
+      var yBuckets = new Array(12).fill(0), yTotal = 0;
+      state.entries.forEach(function (ts) {
+        var e = new Date(ts);
+        if (e.getFullYear() === y) { yBuckets[e.getMonth()]++; yTotal++; }
+      });
+      for (var mo = 0; mo < 12; mo++) {
+        rows.push({
+          count: yBuckets[mo],
+          short: new Date(y, mo, 1).toLocaleDateString([], { month: "short" }),
+          full: new Date(y, mo, 1).toLocaleDateString([], { month: "long", year: "numeric" }),
+          current: y === now.getFullYear() && mo === now.getMonth(),
+          goal: tgt * daysInMonth(y, mo)   // month goal = daily goal × days in that month
+        });
+      }
+      periodLabel = "" + y;
+      atPresent = y === now.getFullYear();
+      unit = "month";
+      summary = "<b>" + yTotal + "</b> glasses in " + y + " · " + (yTotal * GLASS_ML / 1000).toFixed(1) + " L";
+    }
+    return { rows: rows, periodLabel: periodLabel, atPresent: atPresent, unit: unit, summary: summary };
   }
 
   function renderHistory() {
-    // totals
+    var body = $("histBody");
+    var s = buildSeries();
+    var rows = s.rows;
+
+    // Nav header
+    $("histPeriod").textContent = s.periodLabel;
+    histAtPresent = s.atPresent;
+    $("histNext").disabled = s.atPresent;
+
+    // All-time totals (top cards)
     var total = state.entries.length;
+    var days = {};
+    state.entries.forEach(function (ts) { days[dayKey(new Date(ts))] = 1; });
     $("stGlasses").textContent = total;
     $("stLitres").textContent = (total * GLASS_ML / 1000).toFixed(total * GLASS_ML % 1000 === 0 ? 0 : 1) + " L";
-    $("stDays").textContent = Object.keys(aggregate(dayKey)).length;
+    $("stDays").textContent = Object.keys(days).length;
 
-    var rows = [];
-    var now = new Date();
-
-    if (histMode === "daily") {
-      var dm = aggregate(dayKey);
-      for (var i = 13; i >= 0; i--) {
-        var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-        var k = dayKey(d);
-        rows.push({ label: d.toLocaleDateString([], { month: "short", day: "numeric" }), short: "" + d.getDate(), count: dm[k] || 0 });
-      }
-    } else if (histMode === "monthly") {
-      var mm = aggregate(monthKey);
-      for (var j = 11; j >= 0; j--) {
-        var md = new Date(now.getFullYear(), now.getMonth() - j, 1);
-        var mk = monthKey(md);
-        rows.push({ label: md.toLocaleDateString([], { month: "short", year: "2-digit" }), short: md.toLocaleDateString([], { month: "short" }), count: mm[mk] || 0 });
-      }
-    } else {
-      var ym = aggregate(yearKey);
-      var years = Object.keys(ym);
-      var minY = years.length ? Math.min.apply(null, years.map(Number)) : now.getFullYear();
-      for (var y = minY; y <= now.getFullYear(); y++) {
-        rows.push({ label: "" + y, short: "" + y, count: ym["" + y] || 0 });
-      }
-    }
-
-    var body = $("histBody");
-    var anyData = rows.some(function (r) { return r.count > 0; });
-    if (!anyData) {
-      body.innerHTML = '<div class="empty">No history yet for this range.<br>Your logged glasses will appear here.</div>';
+    if (total === 0) {
+      body.innerHTML = '<div class="empty">No history yet.<br>Log some glasses on the Today tab 💧</div>';
       return;
     }
 
-    // Nice ceiling for the y-scale so bars have headroom and gridlines read cleanly.
-    var peak = rows.reduce(function (m, r) { return Math.max(m, r.count); }, 0);
-    var niceMax = peak <= 4 ? Math.max(peak, 1)
-                : peak <= 8 ? Math.ceil(peak / 2) * 2
-                : Math.ceil(peak / 5) * 5;
+    var peak = rows.reduce(function (mx, r) { return Math.max(mx, r.count); }, 0);
+    var goalMax = rows.reduce(function (mx, r) { return Math.max(mx, r.goal || 0); }, 0);
+    var niceMax = niceCeil(Math.max(peak, goalMax));
+    var PLOT_H = 150;
+    var dense = rows.length > 12;
 
-    var PLOT_H = 150; // px available for the tallest bar (plot area is taller, leaving room for the value label)
-    var lastIdx = rows.length - 1;
     var cols = rows.map(function (r, i) {
-      var barPx = r.count > 0 ? Math.max(Math.round((r.count / niceMax) * PLOT_H), 4) : 0;
-      var cls = "col" + (i === lastIdx ? " current" : "");
-      var title = r.label + ": " + r.count + " glass" + (r.count === 1 ? "" : "es") +
-                  " · " + (r.count * GLASS_ML).toLocaleString() + " ml";
-      return '<div class="' + cls + '" title="' + title + '">' +
+      var barPx = r.count > 0 ? Math.max(Math.round((r.count / niceMax) * PLOT_H), 3) : 0;
+      var goalPx = r.goal != null ? Math.round((r.goal / niceMax) * PLOT_H) : 0;
+      var cls = "col" + (r.current ? " current" : "");
+      var title = r.full + ": " + r.count + " glass" + (r.count === 1 ? "" : "es") +
+                  " · " + (r.count * GLASS_ML).toLocaleString() + " ml" +
+                  (r.goal != null ? " (goal " + r.goal + ")" : "");
+      return '<div class="' + cls + '" title="' + title + '"' +
+                  ' data-full="' + r.full + '" data-count="' + r.count + '"' +
+                  ' data-goal="' + (r.goal != null ? r.goal : "") + '">' +
                '<span class="col-plot">' +
+                 (r.goal != null ? '<span class="goal-tick" style="bottom:' + goalPx + 'px"></span>' : '') +
                  (r.count > 0 ? '<span class="col-val">' + r.count + '</span>' : '') +
                  '<span class="col-bar" style="height:' + barPx + 'px"></span>' +
                '</span>' +
@@ -484,10 +578,16 @@
              '</div>';
     }).join("");
 
-    body.innerHTML = '<div class="chart-scale">Glasses per ' +
-                       (histMode === "daily" ? "day" : histMode === "monthly" ? "month" : "year") +
-                       ' · peak ' + peak + '</div>' +
-                     '<div class="chart">' + cols + '</div>';
+    var legend = '<div class="chart-legend">' +
+                   '<span><i class="sw bar"></i>Glasses</span>' +
+                   (goalMax > 0 ? '<span><i class="sw"></i>Goal</span>' : '') +
+                 '</div>';
+
+    body.innerHTML =
+      '<div class="chart-scale">Glasses per ' + s.unit + ' · peak ' + peak + ' · scale 0–' + niceMax + '</div>' +
+      '<div class="chart' + (dense ? ' dense' : '') + '">' + cols + '</div>' +
+      legend +
+      '<div class="hist-readout" id="histReadout">' + s.summary + '</div>';
   }
 
   // ---------- Actions ----------
@@ -518,7 +618,7 @@
     $("view-history").classList.toggle("active", !today);
     $("tab-today").classList.toggle("active", today);
     $("tab-history").classList.toggle("active", !today);
-    if (!today) renderHistory();
+    if (!today) { histCursor = new Date(); renderHistory(); }  // open history on the present period
   }
   $("tab-today").addEventListener("click", function () { showView("today"); });
   $("tab-history").addEventListener("click", function () { showView("history"); });
@@ -533,6 +633,34 @@
   $("h-daily").addEventListener("click", function () { setHist("daily"); });
   $("h-monthly").addEventListener("click", function () { setHist("monthly"); });
   $("h-yearly").addEventListener("click", function () { setHist("yearly"); });
+
+  // Prev / next period navigation
+  function shiftHist(dir) {
+    if (dir > 0 && histAtPresent) return;  // never navigate past the present
+    var y = histCursor.getFullYear(), m = histCursor.getMonth(), d = histCursor.getDate();
+    if (histMode === "daily") histCursor = new Date(y, m, d + dir);
+    else if (histMode === "monthly") histCursor = new Date(y, m + dir, 1);
+    else histCursor = new Date(y + dir, 0, 1);
+    renderHistory();
+  }
+  $("histPrev").addEventListener("click", function () { shiftHist(-1); });
+  $("histNext").addEventListener("click", function () { shiftHist(1); });
+
+  // Tap a bar to read its exact value (works on mobile where there's no hover)
+  $("histBody").addEventListener("click", function (ev) {
+    var col = ev.target.closest ? ev.target.closest(".col") : null;
+    if (!col) return;
+    var chart = col.parentNode;
+    var prev = chart.querySelector(".col.sel");
+    if (prev) prev.classList.remove("sel");
+    col.classList.add("sel");
+    var c = +col.getAttribute("data-count");
+    var g = col.getAttribute("data-goal");
+    var out = $("histReadout");
+    if (out) out.innerHTML = "<b>" + col.getAttribute("data-full") + "</b> · " + c +
+      " glass" + (c === 1 ? "" : "es") + " · " + (c * GLASS_ML).toLocaleString() + " ml" +
+      (g !== "" ? " · goal " + g : "");
+  });
 
   // Clock
   function tick() {
