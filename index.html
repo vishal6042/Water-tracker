@@ -208,9 +208,8 @@
   .chart-scale { font-size: 11px; color: var(--ink-soft); font-weight: 700; margin-bottom: 8px; }
   .chart {
     display: flex; align-items: stretch; gap: 4px;
-    padding: 0 2px; overflow-x: auto;
+    padding: 0 10px; overflow: hidden;   /* clip sub-pixel rounding; never scroll */
   }
-  .chart::-webkit-scrollbar { height: 0; }
   .col {
     flex: 1 1 0; min-width: 0;
     display: flex; flex-direction: column; align-items: center;
@@ -446,10 +445,6 @@
   function sameYMD(a, b) {
     return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   }
-  function hour12(h) {
-    var ap = h < 12 ? "a" : "p", hr = h % 12; if (hr === 0) hr = 12;
-    return hr + ap;
-  }
   function niceCeil(v) {
     v = Math.max(v, 1);
     if (v <= 5) return Math.ceil(v);
@@ -477,8 +472,8 @@
       for (var h = 0; h < 24; h++) {
         rows.push({
           count: buckets[h],
-          short: (h % 4 === 0) ? hour12(h) : "",
-          full: hour12(h) + "–" + hour12((h + 1) % 24),
+          short: (h % 4 === 0 || h === 23) ? (pad(h) + ":00") : "",
+          full: pad(h) + ":00",
           current: isToday && h === now.getHours(),
           goal: null
         });
